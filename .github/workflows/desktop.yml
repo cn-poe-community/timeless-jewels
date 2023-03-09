@@ -1,0 +1,142 @@
+name: desktop
+
+on:
+  push:
+    tags:
+      - v*
+
+env:
+  NODE_VERSION: "18"
+  PNPM_VERSION: "7.5.0"
+  GO_VERSION: "1.19"
+
+jobs:
+  cache-web-contents:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: actions/setup-node@v2
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check out
+        uses: actions/checkout@v3
+
+      - name: Check out tencent branch
+        uses: actions/checkout@v3
+        with:
+          ref: "tencent"
+          path: "tencent"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2.2.4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: |
+            - cwd: frontend
+
+      - name: Install pnpm for tencent branch
+        uses: pnpm/action-setup@v2.2.4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: |
+            - cwd: tencent/frontend
+
+      - name: Build wasm
+        run: go build -ldflags="-s -w" -v -o frontend/static/calculator.wasm ./wasm
+        env:
+          GOOS: js
+          GOARCH: wasm
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          pnpm run build
+          ls -lah build
+      
+      - name: Build frontend of tencent branch
+        working-directory: tencent/frontend
+        run: |
+          pnpm run build
+          ls -lah build
+
+      - name: Use a floor to contain output
+        run: |
+          mkdir -p desktop/html/global
+          mkdir -p desktop/html/tencent
+          cp -nrf frontend/build/* frontend/static/calculator.wasm desktop/html/global
+          cp -nrf tencent/frontend/build/* frontend/static/calculator.wasm desktop/html/tencent
+
+      - uses: actions/cache/save@v3
+        id: cache
+        with:
+          path: desktop/html
+          key: web-contents
+
+  release:
+    needs: [cache-web-contents]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        os: [windows, darwin]
+        arch: [amd64]
+        include:
+          - os: windows
+            arch: 386
+          - os: darwin
+            arch: arm64
+    env:
+      BUNDLE: timeless-jewels-${{ github.ref_name }}-${{ matrix.os }}-${{ matrix.arch }}
+      GOOS: ${{ matrix.os }}
+      GOARCH: ${{ matrix.arch }}
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check out
+        uses: actions/checkout@v3
+
+      - name: restore web-contents
+        uses: actions/cache/restore@v3
+        id: restore-cache
+        with:
+          path: desktop/html
+          key: web-contents
+
+      - name: Build desktop for windows
+        if: ${{ matrix.os == 'windows' }}
+        run: |
+          mkdir ${{ env.BUNDLE }}
+          go build -v -o "${{ env.BUNDLE }}/Timeless Jewels.exe" ./desktop
+          cp -r desktop/html ${{ env.BUNDLE }}
+          7z a ${{ env.BUNDLE }}.zip ${{ env.BUNDLE }}
+
+      - name: Build desktop for macos
+        if: ${{ matrix.os != 'windows' }}
+        run: |
+          mkdir ${{ env.BUNDLE }}
+          go build -v -o "${{ env.BUNDLE }}/timelessjewels" ./desktop
+          cp -r desktop/html ${{ env.BUNDLE }}
+          tar cJf ${{ env.BUNDLE }}.tar.xz ${{ env.BUNDLE }}
+
+      - name: Upload assets for windows
+        if: ${{matrix.os == 'windows'}}
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "${{ env.BUNDLE }}.zip"
+
+      - name: Upload assets for macos
+        if: ${{matrix.os != 'windows'}}
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "${{ env.BUNDLE }}.tar.xz"

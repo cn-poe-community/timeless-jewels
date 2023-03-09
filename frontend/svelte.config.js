@@ -16,7 +16,7 @@ const config = {
       fallback: 'index.html'
     }),
     paths: {
-      base: '/timeless-jewels'
+      base: '/tencent'
     }
   }
 };

@@ -154,16 +154,20 @@ export interface Condition {
 }
 
 export interface TranslationData {
-  condition: Condition[];
-  format: string[];
+  conditions: Condition[];
   index_handlers: Array<string[]>;
   string: string;
 }
 
 export interface Translation {
-  English: TranslationData[];
+  list: TranslationData[];
   ids: string[];
   hidden?: boolean;
+}
+
+export interface TranslationFile {
+  descriptors: Translation[];
+  includes: string[];
 }
 
 export interface Class {

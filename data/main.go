@@ -45,9 +45,17 @@ var skillTreeGz []byte
 var SkillTreeJSON []byte
 var SkillTreeData SkillTree
 
-//go:embed passive_skill.min.json.gz
-var passiveSkillTranslationsGz []byte
-var PassiveSkillTranslationsJSON []byte
+//go:embed stat_descriptions.json.gz
+var statTranslationsGz []byte
+var StatTranslationsJSON []byte
+
+//go:embed passive_skill_stat_descriptions.json.gz
+var passiveSkillStatTranslationsGz []byte
+var PassiveSkillStatTranslationsJSON []byte
+
+//go:embed passive_skill_aura_stat_descriptions.json.gz
+var passiveSkillAuraStatTranslationsGz []byte
+var PassiveSkillAuraStatTranslationsJSON []byte
 
 //go:embed possible_stats.json.gz
 var possibleStatsGz []byte
@@ -108,36 +116,23 @@ func init() {
 		panic(err)
 	}
 
-	reader, err := gzip.NewReader(bytes.NewReader(passiveSkillTranslationsGz))
-	if err != nil {
-		panic(err)
-	}
+	StatTranslationsJSON = unzipTo(statTranslationsGz)
+	PassiveSkillStatTranslationsJSON = unzipTo(passiveSkillStatTranslationsGz)
+	PassiveSkillAuraStatTranslationsJSON = unzipTo(passiveSkillAuraStatTranslationsGz)
 
-	PassiveSkillTranslationsJSON, err = io.ReadAll(reader)
-	if err != nil {
-		panic(err)
-	}
-
-	if err := reader.Close(); err != nil {
-		panic(err)
-	}
-
-	reader, err = gzip.NewReader(bytes.NewReader(possibleStatsGz))
-	if err != nil {
-		panic(err)
-	}
-
-	PossibleStatsJSON, err = io.ReadAll(reader)
-	if err != nil {
-		panic(err)
-	}
-
-	if err := reader.Close(); err != nil {
-		panic(err)
-	}
+	PossibleStatsJSON = unzipTo(possibleStatsGz)
 }
 
 func unzipJSONTo[T any](data []byte) T {
+	var out = new(T)
+	if err := json.Unmarshal(unzipTo(data), &out); err != nil {
+		panic(err)
+	}
+
+	return *out
+}
+
+func unzipTo(data []byte) []byte {
 	reader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		panic(err)
@@ -148,10 +143,5 @@ func unzipJSONTo[T any](data []byte) T {
 		panic(err)
 	}
 
-	var out = new(T)
-	if err := json.Unmarshal(all, &out); err != nil {
-		panic(err)
-	}
-
-	return *out
+	return all
 }

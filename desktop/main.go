@@ -8,11 +8,10 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 )
 
-const httpAddr = "127.0.0.1:3999"
+const httpAddr = "127.0.0.1:3998"
 
 func main() {
 	root := getRoot()
@@ -39,35 +38,8 @@ func getRoot() string {
 	return path.Join(exPath, "html")
 }
 
-// localRedirect gives a Moved Permanently response.
-// It does not convert relative paths to absolute paths like Redirect does.
-func localRedirect(w http.ResponseWriter, r *http.Request, newPath string) {
-	if q := r.URL.RawQuery; q != "" {
-		newPath += "?" + q
-	}
-	w.Header().Set("Location", newPath)
-	w.WriteHeader(http.StatusMovedPermanently)
-}
-
-type mappingFileHandler struct {
-	http.Handler
-}
-
-func (m *mappingFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasSuffix(r.URL.Path, "/tree") {
-		r.URL.Path = r.URL.Path + ".html"
-	}
-	m.Handler.ServeHTTP(w, r)
-}
-
-func MappingFileServer(root http.FileSystem) http.Handler {
-	return &mappingFileHandler{
-		http.FileServer(root),
-	}
-}
-
 func registerStatic(root string) {
-	static := MappingFileServer(http.Dir(root))
+	static := FileServer(root)
 	http.Handle("/", static)
 }
 

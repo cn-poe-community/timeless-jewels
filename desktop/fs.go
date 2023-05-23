@@ -61,5 +61,5 @@ func (h *fileHandler) getEtag(filePath string, modtime time.Time) (string, error
 		return "", err
 	}
 
-	return fmt.Sprintf("%d%d", modtime.Unix(), crc32.ChecksumIEEE(dat)), nil
+	return fmt.Sprintf(`"%d%d"`, modtime.Unix(), crc32.ChecksumIEEE(dat)), nil
 }

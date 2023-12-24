@@ -260,15 +260,23 @@ export const formatStats = (translation: Translation, stat: number): string | un
 
   let finalStat = stat;
 
-  if (datum.index_handlers?.length > 0) {
-    datum.index_handlers[0].forEach((handler) => {
-      finalStat = finalStat / (indexHandlers[handler] || 1);
-    });
+  if (datum.index_handlers !== undefined) {
+    if (Array.isArray(datum.index_handlers)) {
+      if (datum.index_handlers?.length > 0) {
+        datum.index_handlers[0].forEach((handler) => {
+          finalStat = finalStat / (indexHandlers[handler] || 1);
+        });
+      }
+    } else {
+      Object.keys(datum.index_handlers).forEach((handler) => {
+        finalStat = finalStat / (indexHandlers[handler] || 1);
+      });
+    }
   }
 
   return datum.string
     .replace(/\{0(?::(.*?)d(.*?))\}/, '$1' + finalStat.toString() + '$2')
-    .replace(`{0}`, finalStat.toString());
+    .replace(`{0}`, parseFloat(finalStat.toFixed(2)).toString());
 };
 
 export const baseJewelRadius = 1800;
@@ -376,58 +384,74 @@ const tradeStatNames: { [key: number]: { [key: string]: string } } = {
   }
 };
 
-// TODO Figure out what the actual limit is
-const maxQueries = 28;
 export const constructQuery = (jewel: number, conqueror: string, result: SearchWithSeed[]) => {
-  const seeds: number[] = [];
+  const max_filter_length = 50;
+  const max_filters = 4;
+  const max_query_length = max_filter_length * max_filters;
+  const final_query = [];
+  const stat = {
+    type: 'count',
+    value: { min: 1 },
+    filters: [],
+    disabled: false
+  };
 
-  for (const r of result) {
-    if (seeds.length >= maxQueries) {
-      break;
+  // single seed case
+  if (result.length == 1) {
+    for (const conq of Object.keys(tradeStatNames[jewel])) {
+      stat.filters.push({
+        id: tradeStatNames[jewel][conq],
+        value: {
+          min: result[0].seed,
+          max: result[0].seed
+        },
+        disabled: conq != conqueror
+      });
     }
 
-    seeds.push(r.seed);
-  }
-
-  let stats;
-  if (seeds.length * 4 < maxQueries) {
-    stats = [
-      {
+    final_query.push(stat);
+    // too many results case
+  } else if (result.length > max_query_length) {
+    for (let i = 0; i < max_filters; i++) {
+      final_query.push({
         type: 'count',
+        value: { min: 1 },
+        filters: [],
+        disabled: i == 0 ? false : true
+      });
+    }
+
+    for (const [i, r] of result.slice(0, max_query_length).entries()) {
+      const index = Math.floor(i / max_filter_length);
+
+      final_query[index].filters.push({
+        id: tradeStatNames[jewel][conqueror],
         value: {
-          min: 1
-        },
-        filters: Object.keys(tradeStatNames[jewel])
-          .map((c) =>
-            seeds.map((seed) => ({
-              id: tradeStatNames[jewel][c],
-              disabled: false,
-              value: {
-                min: seed,
-                max: seed
-              }
-            }))
-          )
-          .flat(),
-        disabled: false
-      }
-    ];
-  } else {
-    stats = Object.keys(tradeStatNames[jewel]).map((c) => ({
-      type: 'count',
-      value: {
-        min: 1
-      },
-      filters: seeds.map((seed) => ({
-        id: tradeStatNames[jewel][c],
-        disabled: false,
-        value: {
-          min: seed,
-          max: seed
+          min: r.seed,
+          max: r.seed
         }
-      })),
-      disabled: c != conqueror
-    }));
+      });
+    }
+  } else {
+    for (const conq of Object.keys(tradeStatNames[jewel])) {
+      stat.disabled = conq != conqueror;
+
+      for (const r of result) {
+        stat.filters.push({
+          id: tradeStatNames[jewel][conq],
+          value: {
+            min: r.seed,
+            max: r.seed
+          }
+        });
+      }
+
+      if (stat.filters.length > max_filter_length) {
+        stat.filters = stat.filters.slice(0, max_filter_length);
+      }
+
+      final_query.push(stat);
+    }
   }
 
   return {
@@ -435,9 +459,7 @@ export const constructQuery = (jewel: number, conqueror: string, result: SearchW
       status: {
         option: 'online'
       },
-      name: data.TimelessJewels[jewel],
-      type: 'Timeless Jewel',
-      stats
+      stats: final_query
     },
     sort: {
       price: 'asc'
@@ -446,7 +468,7 @@ export const constructQuery = (jewel: number, conqueror: string, result: SearchW
 };
 
 export const openTrade = (jewel: number, conqueror: string, results: SearchWithSeed[]) => {
-  const url = new URL('https://www.pathofexile.com/trade/search/Sentinel');
+  const url = new URL('https://www.pathofexile.com/trade/search/Affliction');
   url.searchParams.set('q', JSON.stringify(constructQuery(jewel, conqueror, results)));
   window.open(url, '_blank');
 };

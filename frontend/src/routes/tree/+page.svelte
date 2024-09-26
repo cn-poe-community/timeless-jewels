@@ -447,7 +447,11 @@
             </button>
 
             <h3 class="flex-grow">
-              {results ? 'Results' : 'Timeless Jewel'}
+              {#if results}
+                <span>Results</span>
+              {:else}
+                <span>Timeless Jewel</span>
+              {/if}
             </h3>
           </div>
           {#if searchResults}
